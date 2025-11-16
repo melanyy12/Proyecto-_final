@@ -167,6 +167,397 @@ defp submenu_colaboracion do
   end
 end
 
+defp submenu_nodos_distribuidos do
+  mostrar_menu_nodos()
+
+  case obtener_opcion() do
+    "1" -> ver_cluster_status() |> then(fn _ -> submenu_nodos_distribuidos() end)
+    "2" -> conectar_nodo_manual() |> then(fn _ -> submenu_nodos_distribuidos() end)
+    "3" -> desconectar_nodo() |> then(fn _ -> submenu_nodos_distribuidos() end)
+    "4" -> sincronizar_cluster() |> then(fn _ -> submenu_nodos_distribuidos() end)
+    "5" -> enviar_broadcast_manual() |> then(fn _ -> submenu_nodos_distribuidos() end)
+    "6" -> dashboard_en_vivo() |> then(fn _ -> submenu_nodos_distribuidos() end)
+    "7" -> configurar_autoreconexion() |> then(fn _ -> submenu_nodos_distribuidos() end)
+    "8" -> estadisticas_cluster() |> then(fn _ -> submenu_nodos_distribuidos() end)
+    "0" -> :volver_menu_principal
+    _ ->
+      IO.puts("\nX Opcion invalida.\n")
+      submenu_nodos_distribuidos()
+  end
+end
+
+defp mostrar_menu_nodos do
+  IO.puts("\n")
+  IO.puts("============ CLUSTER DISTRIBUIDO ==========")
+  IO.puts("")
+  IO.puts(" 1. Ver estado del cluster")
+  IO.puts(" 2. Conectar a un nodo")
+  IO.puts(" 3. Desconectar nodo")
+  IO.puts(" 4. Sincronizar cluster completo")
+  IO.puts(" 5. Enviar broadcast")
+  IO.puts(" 6. Dashboard en tiempo real")
+  IO.puts(" 7. Configurar auto-reconexión")
+  IO.puts(" 8. Estadísticas del cluster")
+  IO.puts("")
+  IO.puts(" 0. ← Volver al menú principal")
+  IO.puts("")
+  IO.puts("===============================================")
+end
+
+defp ver_cluster_status do
+  IO.puts("\n")
+  IO.puts("═══════════════════════════════════════════")
+  IO.puts("   ESTADO DEL CLUSTER DISTRIBUIDO")
+  IO.puts("═══════════════════════════════════════════")
+  IO.puts("")
+
+  # Información del nodo actual
+  info = Hackathon.Distribucion.Nodo.info_nodo_actual()
+
+  IO.puts(" Nodo Actual:")
+  IO.puts("   Nombre: #{info.nombre}")
+  IO.puts("   Cookie: #{info.cookie}")
+  IO.puts("   Vivo: #{if info.vivo?, do: " Sí", else: " No"}")
+  IO.puts("")
+
+  # Nodos conectados
+  case Hackathon.Distribucion.Nodo.listar_nodos_conectados() do
+    {:ok, nodos_info} ->
+      IO.puts(" Nodos Conectados: #{nodos_info.total}")
+
+      if nodos_info.total > 0 do
+        IO.puts("")
+        Enum.with_index(nodos_info.conectados, 1)
+        |> Enum.each(fn {nodo, idx} ->
+          estado = if Node.ping(nodo) == :pong, do: "Ok", else: "Desconectado"
+          IO.puts("   #{idx}. #{estado} #{nodo}")
+        end)
+      else
+        IO.puts("   (No hay otros nodos conectados)")
+      end
+      IO.puts("")
+
+      # Nodos conocidos pero no conectados
+      conocidos_no_conectados = nodos_info.conocidos -- nodos_info.conectados
+      if length(conocidos_no_conectados) > 0 do
+        IO.puts("  Nodos Conocidos (desconectados):")
+        Enum.each(conocidos_no_conectados, fn nodo ->
+          IO.puts("    #{nodo}")
+        end)
+        IO.puts("")
+      end
+
+    _ ->
+      IO.puts(" Error al obtener información de nodos\n")
+  end
+
+  IO.puts("═══════════════════════════════════════════\n")
+  pausar()
+end
+
+defp conectar_nodo_manual do
+  IO.puts("\n=== CONECTAR A UN NODO ===\n")
+
+  IO.puts("Ejemplos de formato:")
+  IO.puts("  • Mismo host: nodo1@#{:inet.gethostname() |> elem(1)}")
+  IO.puts("  • Otra PC: nodo1@192.168.1.10")
+  IO.puts("")
+
+  IO.puts("Ingresa el nombre completo del nodo:")
+  entrada = IO.gets("> ") |> String.trim()
+
+  if entrada != "" do
+    nodo = String.to_atom(entrada)
+
+    IO.puts("\n Conectando a #{nodo}...")
+
+    case Hackathon.Distribucion.Nodo.conectar_nodo(nodo) do
+      {:ok, :conectado} ->
+        IO.puts(" Conectado exitosamente!")
+
+        # Preguntar si activar auto-reconexión
+        IO.puts("\n¿Activar auto-reconexión para este nodo? (s/n)")
+        if IO.gets("> ") |> String.trim() |> String.downcase() == "s" do
+          Hackathon.Distribucion.AutoReconexion.activar_para(nodo)
+          IO.puts(" Auto-reconexión activada")
+        end
+
+      {:ok, :ya_conectado} ->
+        IO.puts("  El nodo ya estaba conectado")
+
+      {:error, :conexion_fallida} ->
+        IO.puts(" No se pudo conectar")
+        IO.puts("\nVerifica que:")
+        IO.puts("  • El nodo esté ejecutándose")
+        IO.puts("  • Usen la misma cookie")
+        IO.puts("  • El firewall permita la conexión")
+
+      error ->
+        IO.puts(" Error: #{inspect(error)}")
+    end
+  else
+    IO.puts("\nOperación cancelada")
+  end
+
+  IO.puts("")
+  pausar()
+end
+
+defp desconectar_nodo do
+  IO.puts("\n=== DESCONECTAR NODO ===\n")
+
+  case Hackathon.Distribucion.Nodo.listar_nodos_conectados() do
+    {:ok, %{conectados: []}} ->
+      IO.puts("No hay nodos conectados para desconectar.\n")
+
+    {:ok, %{conectados: nodos}} ->
+      IO.puts("Nodos conectados:\n")
+
+      nodos
+      |> Enum.with_index(1)
+      |> Enum.each(fn {nodo, idx} ->
+        IO.puts("  #{idx}. #{nodo}")
+      end)
+
+      IO.puts("\nSelecciona el número del nodo a desconectar (0 para cancelar):")
+      opcion = IO.gets("> ") |> String.trim()
+
+      case Integer.parse(opcion) do
+        {num, _} when num > 0 and num <= length(nodos) ->
+          nodo = Enum.at(nodos, num - 1)
+
+          if Node.disconnect(nodo) do
+            IO.puts("\n Desconectado de #{nodo}")
+          else
+            IO.puts("\n No se pudo desconectar")
+          end
+
+        {0, _} ->
+          IO.puts("\nOperación cancelada")
+
+        _ ->
+          IO.puts("\n Opción inválida")
+      end
+
+    _ ->
+      IO.puts("Error al listar nodos.\n")
+  end
+
+  pausar()
+end
+
+defp sincronizar_cluster do
+  IO.puts("\n=== SINCRONIZAR CLUSTER COMPLETO ===\n")
+
+  case Hackathon.Distribucion.Nodo.listar_nodos_conectados() do
+    {:ok, %{total: 0}} ->
+      IO.puts("  No hay otros nodos conectados para sincronizar.\n")
+
+    {:ok, %{total: total}} ->
+      IO.puts(" Sincronizando con #{total} nodo(s)...")
+
+      Hackathon.Distribucion.Nodo.sincronizar_datos()
+
+      # Esperar un poco
+      :timer.sleep(1000)
+
+      IO.puts(" Sincronización completada!")
+      IO.puts("\nDatos sincronizados:")
+      IO.puts("  • Equipos")
+      IO.puts("  • Proyectos")
+      IO.puts("  • Participantes")
+      IO.puts("  • Mentores\n")
+
+    _ ->
+      IO.puts(" Error al sincronizar\n")
+  end
+
+  pausar()
+end
+
+defp enviar_broadcast_manual do
+  IO.puts("\n=== ENVIAR BROADCAST A TODOS LOS NODOS ===\n")
+
+  case Hackathon.Distribucion.Nodo.listar_nodos_conectados() do
+    {:ok, %{total: 0}} ->
+      IO.puts("  No hay otros nodos conectados.\n")
+
+    {:ok, %{total: total}} ->
+      IO.puts("Destino: #{total} nodo(s) conectado(s)")
+      IO.puts("\nTipo de mensaje:")
+      IO.puts("  1. Anuncio general")
+      IO.puts("  2. Alerta")
+      IO.puts("  3. Notificación de evento")
+      IO.puts("  4. Mensaje personalizado")
+
+      tipo_opcion = IO.gets("\nSelecciona tipo: ") |> String.trim()
+
+      {tipo, contenido} = case tipo_opcion do
+        "1" ->
+          IO.puts("\nEscribe el anuncio:")
+          texto = IO.gets("> ") |> String.trim()
+          {:anuncio, texto}
+
+        "2" ->
+          IO.puts("\nEscribe la alerta:")
+          texto = IO.gets("> ") |> String.trim()
+          {:alerta, texto}
+
+        "3" ->
+          IO.puts("\nDescribe el evento:")
+          texto = IO.gets("> ") |> String.trim()
+          {:evento, texto}
+
+        "4" ->
+          IO.puts("\nEscribe el mensaje:")
+          texto = IO.gets("> ") |> String.trim()
+          {:custom, texto}
+
+        _ ->
+          {:none, nil}
+      end
+
+      if contenido do
+        mensaje = {tipo, contenido, Node.self(), DateTime.utc_now()}
+        Hackathon.Distribucion.Nodo.broadcast(mensaje)
+        IO.puts("\n Broadcast enviado a #{total} nodo(s)\n")
+      else
+        IO.puts("\nOperación cancelada\n")
+      end
+
+    _ ->
+      IO.puts(" Error al enviar broadcast\n")
+  end
+
+  pausar()
+end
+
+defp dashboard_en_vivo do
+  IO.puts("\n=== DASHBOARD EN TIEMPO REAL ===\n")
+  IO.puts("El dashboard se actualizará cada 5 segundos.")
+  IO.puts("Presiona Ctrl+C dos veces para salir.\n")
+
+  pausar()
+
+  # Iniciar dashboard
+  Hackathon.Distribucion.Dashboard.iniciar_monitoreo(5)
+
+  # Mantener proceso vivo
+  Process.sleep(:infinity)
+end
+
+defp configurar_autoreconexion do
+  IO.puts("\n=== CONFIGURAR AUTO-RECONEXIÓN ===\n")
+
+  IO.puts("Opciones:")
+  IO.puts("  1. Activar para todos los nodos conectados")
+  IO.puts("  2. Activar para un nodo específico")
+  IO.puts("  3. Desactivar auto-reconexión")
+  IO.puts("  4. Ver nodos monitoreados")
+
+  opcion = IO.gets("\n> ") |> String.trim()
+
+  case opcion do
+    "1" ->
+      nodos = Node.list()
+      if length(nodos) > 0 do
+        Enum.each(nodos, fn nodo ->
+          Hackathon.Distribucion.AutoReconexion.activar_para(nodo)
+        end)
+        IO.puts("\n Auto-reconexión activada para #{length(nodos)} nodo(s)\n")
+      else
+        IO.puts("\n  No hay nodos conectados\n")
+      end
+
+    "2" ->
+      IO.puts("\nIngresa el nodo (ej: nodo1@192.168.1.10):")
+      nodo = IO.gets("> ") |> String.trim() |> String.to_atom()
+      Hackathon.Distribucion.AutoReconexion.activar_para(nodo)
+      IO.puts("\n Auto-reconexión activada para #{nodo}\n")
+
+    "3" ->
+      monitoreados = Hackathon.Distribucion.AutoReconexion.nodos_monitoreados()
+      if length(monitoreados) > 0 do
+        IO.puts("\nNodos monitoreados:")
+        Enum.with_index(monitoreados, 1)
+        |> Enum.each(fn {nodo, idx} ->
+          IO.puts("  #{idx}. #{nodo}")
+        end)
+
+        IO.puts("\nSelecciona el nodo:")
+        num = IO.gets("> ") |> String.trim() |> String.to_integer()
+        nodo = Enum.at(monitoreados, num - 1)
+        Hackathon.Distribucion.AutoReconexion.desactivar_para(nodo)
+        IO.puts("\n Auto-reconexión desactivada para #{nodo}\n")
+      else
+        IO.puts("\n  No hay nodos monitoreados\n")
+      end
+
+    "4" ->
+      monitoreados = Hackathon.Distribucion.AutoReconexion.nodos_monitoreados()
+      IO.puts("\n📡 Nodos con auto-reconexión:")
+      if length(monitoreados) > 0 do
+        Enum.each(monitoreados, fn nodo ->
+          estado = if nodo in Node.list(), do: " Conectado", else: " Reconectando"
+          IO.puts("  • #{nodo} - #{estado}")
+        end)
+      else
+        IO.puts("  (Ninguno)")
+      end
+      IO.puts("")
+
+    _ ->
+      IO.puts("\n Opción inválida\n")
+  end
+
+  pausar()
+end
+
+defp estadisticas_cluster do
+  IO.puts("\n")
+  IO.puts("═══════════════════════════════════════════")
+  IO.puts("   ESTADÍSTICAS DEL CLUSTER")
+  IO.puts("═══════════════════════════════════════════")
+  IO.puts("")
+
+  case Hackathon.Distribucion.Dashboard.obtener_estadisticas() do
+    stats ->
+      IO.puts(" CONECTIVIDAD:")
+      IO.puts("   Nodos activos: #{stats.total_nodos}")
+      IO.puts("   Nodo actual: #{stats.nodo_actual}")
+      IO.puts("")
+
+      IO.puts(" DATOS:")
+      IO.puts("   Equipos totales: #{stats.equipos_total}")
+      IO.puts("   Proyectos totales: #{stats.proyectos_total}")
+      IO.puts("   Participantes: #{stats.participantes_total}")
+      IO.puts("   Mentores: #{stats.mentores_total}")
+      IO.puts("   Mensajes: #{stats.mensajes_total}")
+      IO.puts("")
+
+      IO.puts(" RECURSOS:")
+      IO.puts("   Memoria total: #{stats.memoria_total_mb} MB")
+      IO.puts("")
+
+      # Estadísticas de auto-reconexión
+      auto_stats = Hackathon.Distribucion.AutoReconexion.estadisticas()
+      IO.puts(" AUTO-RECONEXIÓN:")
+      IO.puts("   Nodos monitoreados: #{auto_stats.nodos_monitoreados}")
+      IO.puts("   Reconexiones exitosas: #{auto_stats.reconexiones_exitosas}")
+      IO.puts("   Reconexiones fallidas: #{auto_stats.reconexiones_fallidas}")
+      if length(auto_stats.nodos_perdidos) > 0 do
+        IO.puts("   Nodos perdidos: #{Enum.join(auto_stats.nodos_perdidos, ", ")}")
+      end
+      IO.puts("")
+
+    _ ->
+      IO.puts(" Error al obtener estadísticas\n")
+  end
+
+  IO.puts("═══════════════════════════════════════════\n")
+  pausar()
+end
+
 defp mostrar_menu_colaboracion do
   IO.puts("\n")
   IO.puts("============ COLABORACION ==================")

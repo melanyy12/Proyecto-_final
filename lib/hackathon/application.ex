@@ -1,31 +1,45 @@
 defmodule Hackathon.Application do
   @moduledoc """
   Aplicación OTP con supervisión de servicios críticos
+  Incluye soporte para nodos distribuidos
   """
   use Application
+  require Logger
 
   @impl true
   def start(_type, _args) do
-  children = [
-    # Registry para canales de chat dinámicos
-    {Registry, keys: :unique, name: Hackathon.CanalRegistry},
+    children = [
+      # Registry para canales de chat dinámicos
+      {Registry, keys: :unique, name: Hackathon.CanalRegistry},
 
-    # Sistema de Chat principal
-    {Hackathon.Services.SistemaChat, []},
+      # Sistema de Chat principal
+      {Hackathon.Services.SistemaChat, []},
 
-    # Monitor de métricas                                    
-    {Hackathon.Metricas.Monitor, []},
+      # Monitor de métricas
+      {Hackathon.Metricas.Monitor, []},
 
-    # Supervisor dinámico para canales individuales
-    {DynamicSupervisor, strategy: :one_for_one, name: Hackathon.CanalesSupervisor},
+      # Sistema de Nodos Distribuidos
+      {Hackathon.Distribucion.Nodo, []},
 
-    # Tarea periódica para limpiar sesiones expiradas
-    {Task, fn -> iniciar_limpieza_periodica() end}
-  ]
+      # Supervisor dinámico para canales individuales
+      {DynamicSupervisor, strategy: :one_for_one, name: Hackathon.CanalesSupervisor},
 
-  opts = [strategy: :one_for_one, name: Hackathon.Supervisor]
-  Supervisor.start_link(children, opts)
-end
+      # Tarea periódica para limpiar sesiones expiradas
+      {Task, fn -> iniciar_limpieza_periodica() end}
+    ]
+
+    opts = [strategy: :one_for_one, name: Hackathon.Supervisor]
+
+    Logger.info(" Iniciando aplicación Hackathon...")
+    case Supervisor.start_link(children, opts) do
+      {:ok, pid} ->
+        Logger.info(" Aplicación iniciada correctamente")
+        {:ok, pid}
+      error ->
+        Logger.error(" Error al iniciar aplicación: #{inspect(error)}")
+        error
+    end
+  end
 
   defp iniciar_limpieza_periodica do
     # Limpiar sesiones cada hora
