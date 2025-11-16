@@ -1,4 +1,3 @@
-# test/performance_test.exs
 defmodule HackathonPerformanceTest do
   use ExUnit.Case
 
@@ -60,7 +59,7 @@ defmodule HackathonPerformanceTest do
       assert length(mensajes) >= num_mensajes * 0.9, "Al menos 90% deben persistirse"
     end
 
-    test "multiples usuarios en multiples canales concurrentemente" do
+    test "múltiples usuarios en múltiples canales concurrentemente" do
       num_usuarios = 100
       num_canales = 10
       mensajes_por_usuario = 10
@@ -89,7 +88,7 @@ defmodule HackathonPerformanceTest do
       total_mensajes = num_usuarios * num_canales * mensajes_por_usuario
 
       IO.puts("\n═══════════════════════════════════════════")
-      IO.puts("   PRUEBA COMPLETADA: Multiples canales")
+      IO.puts("   PRUEBA COMPLETADA: Múltiples canales")
       IO.puts("═══════════════════════════════════════════")
       IO.puts("   Total mensajes: #{total_mensajes}")
       IO.puts("   Canales: #{num_canales}")
@@ -133,7 +132,7 @@ defmodule HackathonPerformanceTest do
       {:ok, equipos} = GestionEquipos.listar_equipos()
 
       IO.puts("\n═══════════════════════════════════════════")
-      IO.puts("  PRUEBA COMPLETADA: Creacion de equipos")
+      IO.puts("   PRUEBA COMPLETADA: Creación de equipos")
       IO.puts("═══════════════════════════════════════════")
       IO.puts("   Equipos creados: #{exitosos}/#{num_equipos}")
       IO.puts("   Persistidos: #{length(equipos)}")
@@ -167,7 +166,7 @@ defmodule HackathonPerformanceTest do
         Task.async(fn ->
           GestionProyectos.registrar_proyecto(%{
             nombre: "Proyecto #{equipo.nombre}",
-            descripcion: "Descripcion detallada del proyecto de innovacion tecnologica",
+            descripcion: "Descripción detallada del proyecto de innovación tecnológica",
             categoria: :tecnologia,
             equipo_id: equipo.id
           })
@@ -181,7 +180,7 @@ defmodule HackathonPerformanceTest do
       end)
       |> Enum.map(fn {:ok, p} -> p end)
 
-      # Agregar avances de forma secuencial por proyecto
+      # Agregar avances de forma secuencial por proyecto (más realista)
       Enum.each(proyectos, fn proyecto ->
         Enum.each(1..5, fn i ->
           GestionProyectos.agregar_avance(proyecto.id, "Avance #{i}")
@@ -254,8 +253,8 @@ defmodule HackathonPerformanceTest do
   end
 
   describe "Pruebas de Carga - Sistema Completo" do
-    test "simulacion de hackathon completa con 50 equipos" do
-      IO.puts("\n SIMULACION COMPLETA DE HACKATHON")
+    test "simulación de hackathon completa con 50 equipos" do
+      IO.puts("\n SIMULACIÓN COMPLETA DE HACKATHON")
       IO.puts("════════════════════════════════════════════\n")
 
       inicio_total = System.monotonic_time(:millisecond)
@@ -303,25 +302,73 @@ defmodule HackathonPerformanceTest do
       end)
       IO.puts("    Participantes asignados")
 
-      # Verificaciones basicas
-      {:ok, equipos_final} = GestionEquipos.listar_equipos()
-      {:ok, participantes_final} = GestionParticipantes.listar_participantes()
+      # Fase 4: Proyectos
+      IO.puts("\n Fase 4: Creando proyectos...")
+      proyectos = Enum.map(equipos, fn equipo ->
+        {:ok, p} = GestionProyectos.registrar_proyecto(%{
+          nombre: "Project #{equipo.nombre}",
+          descripcion: "Una solución innovadora para problemas reales de la comunidad",
+          categoria: equipo.categoria,
+          equipo_id: equipo.id
+        })
+        p
+      end)
+      IO.puts("    #{length(proyectos)} proyectos registrados")
+
+      # Fase 5: Actividad concurrente
+      IO.puts("\n Fase 5: Simulando actividad concurrente...")
+      tareas = [
+        # Mensajes de chat
+        Task.async(fn ->
+          Enum.each(1..500, fn i ->
+            equipo = Enum.random(equipos)
+            SistemaChat.enviar_mensaje("user_#{i}", "Mensaje #{i}", "equipo_#{equipo.id}")
+          end)
+        end),
+
+        # Avances de proyectos
+        Task.async(fn ->
+          Enum.each(proyectos, fn proyecto ->
+            Enum.each(1..3, fn i ->
+              GestionProyectos.agregar_avance(proyecto.id, "Avance #{i}")
+            end)
+          end)
+        end),
+
+        # Retroalimentación de mentores
+        Task.async(fn ->
+          Enum.each(proyectos, fn proyecto ->
+            mentor = Enum.random(mentores)
+            GestionProyectos.agregar_retroalimentacion(proyecto.id, mentor.id, "Buen trabajo")
+          end)
+        end)
+      ]
+
+      Enum.each(tareas, &Task.await(&1, 30_000))
+      IO.puts("    Actividad completada")
 
       fin_total = System.monotonic_time(:millisecond)
       tiempo_total = fin_total - inicio_total
 
+      # Verificaciones finales
+      {:ok, equipos_final} = GestionEquipos.listar_equipos()
+      {:ok, proyectos_final} = GestionProyectos.listar_proyectos()
+      {:ok, stats} = SistemaChat.obtener_estadisticas()
+
       IO.puts("\n════════════════════════════════════════════")
-      IO.puts("   FASE 1-3 COMPLETADA")
+      IO.puts("   SIMULACIÓN COMPLETADA")
       IO.puts("════════════════════════════════════════════")
-      IO.puts("  Participantes: #{length(participantes_final)}")
-      IO.puts("  Mentores: #{length(mentores)}")
-      IO.puts("  Equipos: #{length(equipos_final)}")
-      IO.puts("  Tiempo: #{Float.round(tiempo_total / 1000, 2)}s")
+      IO.puts("   Participantes: #{length(participantes)}")
+      IO.puts("   Mentores: #{length(mentores)}")
+      IO.puts("   Equipos: #{length(equipos_final)}")
+      IO.puts("   Proyectos: #{length(proyectos_final)}")
+      IO.puts("   Mensajes: #{stats.mensajes_enviados}")
+      IO.puts("   Tiempo total: #{Float.round(tiempo_total / 1000, 2)}s")
       IO.puts("════════════════════════════════════════════\n")
 
-      # Assertions basicas
       assert length(equipos_final) >= 45
-      assert length(participantes_final) >= 140
+      assert length(proyectos_final) >= 45
+      assert stats.mensajes_enviados >= 400
     end
   end
 end

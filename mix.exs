@@ -2,15 +2,19 @@ defmodule Hackathon.MixProject do
   use Mix.Project
 
   def project do
-    [
-      app: :hackathon,
-      version: "0.1.0",
-      elixir: "~> 1.14",
-      start_permanent: Mix.env() == :prod,
-      escript: [main_module: Hackathon.CLI],
-      deps: deps()
+  [
+    app: :hackathon,
+    version: "0.1.0",
+    elixir: "~> 1.14",
+    start_permanent: Mix.env() == :prod,
+    escript: [main_module: Hackathon.CLI],
+    deps: deps(),
+    test_pattern: "*_test.exs",
+    preferred_cli_env: [
+      "test.performance": :test
     ]
-  end
+  ]
+end
 
   def application do
     [
