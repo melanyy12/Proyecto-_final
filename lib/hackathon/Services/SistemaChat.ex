@@ -220,4 +220,84 @@ defmodule Hackathon.Services.CanalChat do
     nuevos_suscriptores = List.delete(estado.suscriptores, pid)
     {:noreply, %{estado | suscriptores: nuevos_suscriptores}}
   end
+
+  # ============================================
+  # FUNCIONES PARA SALAS TEMÁTICAS
+  # ============================================
+
+  @doc """
+  Envía un mensaje a una sala temática
+  """
+  def enviar_mensaje_sala(emisor_id, contenido, sala_id) do
+    # Verificar que el usuario esté en la sala
+    case Hackathon.Services.GestionSalas.obtener_sala(sala_id) do
+      {:ok, sala} ->
+        if emisor_id in sala.miembros or emisor_id == sala.creador_id do
+          canal = "sala_#{sala_id}"
+          # Llamar al módulo SistemaChat (no a sí mismo)
+          Hackathon.Services.SistemaChat.enviar_mensaje(emisor_id, contenido, canal)
+        else
+          {:error, "No perteneces a esta sala"}
+        end
+
+      {:error, :no_encontrado} ->
+        {:error, "Sala no encontrada"}
+
+      error ->
+        error
+    end
+  end
+
+  @doc """
+  Obtiene el historial de mensajes de una sala
+  """
+  def obtener_historial_sala(sala_id, usuario_id) do
+    case Hackathon.Services.GestionSalas.obtener_sala(sala_id) do
+      {:ok, sala} ->
+        if usuario_id in sala.miembros or usuario_id == sala.creador_id or sala.publica do
+          canal = "sala_#{sala_id}"
+          # Llamar al módulo SistemaChat (no a sí mismo)
+          Hackathon.Services.SistemaChat.obtener_historial(canal)
+        else
+          {:error, "No tienes acceso a esta sala"}
+        end
+
+      error ->
+        error
+    end
+  end
+
+  @doc """
+  Obtiene estadísticas de una sala específica
+  """
+  def obtener_estadisticas_sala(sala_id) do
+    canal = "sala_#{sala_id}"
+
+    # Llamar al módulo SistemaChat (no a sí mismo)
+    case Hackathon.Services.SistemaChat.obtener_historial(canal) do
+      {:ok, mensajes} ->
+        stats = %{
+          total_mensajes: length(mensajes),
+          participantes_activos: mensajes
+            |> Enum.map(& &1.emisor_id)
+            |> Enum.uniq()
+            |> length(),
+          ultimo_mensaje: List.first(mensajes),
+          mensajes_hoy: contar_mensajes_hoy(mensajes)
+        }
+        {:ok, stats}
+
+      error ->
+        error
+    end
+  end
+
+  defp contar_mensajes_hoy(mensajes) do
+    hoy = Date.utc_today()
+
+    Enum.count(mensajes, fn mensaje ->
+      fecha_mensaje = DateTime.to_date(mensaje.fecha)
+      Date.compare(fecha_mensaje, hoy) == :eq
+    end)
+  end
 end

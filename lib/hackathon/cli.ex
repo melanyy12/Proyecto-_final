@@ -155,9 +155,11 @@ defp submenu_colaboracion do
     "1" -> agregar_avance() |> then(fn _ -> submenu_colaboracion() end)
     "2" -> ver_chat_equipo() |> then(fn _ -> submenu_colaboracion() end)
     "3" -> enviar_mensaje_chat() |> then(fn _ -> submenu_colaboracion() end)
-    "4" -> ver_canal_general() |> then(fn _ -> submenu_colaboracion() end)          # NUEVO
-    "5" -> enviar_anuncio_general() |> then(fn _ -> submenu_colaboracion() end)     # NUEVO
-    "6" -> dar_retroalimentacion_mentor() |> then(fn _ -> submenu_colaboracion() end) # NUEVO
+    "4" -> ver_canal_general() |> then(fn _ -> submenu_colaboracion() end)
+    "5" -> enviar_anuncio_general() |> then(fn _ -> submenu_colaboracion() end)
+    "6" -> dar_retroalimentacion_mentor() |> then(fn _ -> submenu_colaboracion() end)
+    "7" -> gestionar_salas_tematicas() |> then(fn _ -> submenu_colaboracion() end)
+    "8" -> ver_metricas_sistema() |> then(fn _ -> submenu_colaboracion() end)
     "0" -> :volver_menu_principal
     _ ->
       IO.puts("\nX Opcion invalida.\n")
@@ -175,6 +177,8 @@ defp mostrar_menu_colaboracion do
   IO.puts(" 4. Ver canal general de anuncios")
   IO.puts(" 5. Enviar anuncio general (mentor)")
   IO.puts(" 6. Dar retroalimentacion (mentor)")
+  IO.puts(" 7. Gestionar salas tematicas")
+  IO.puts(" 8. Ver metricas del sistema")
   IO.puts("")
   IO.puts(" 0. ← Volver al menu principal")
   IO.puts("")
@@ -1598,6 +1602,348 @@ defp buscar_mentor_por_id(id) do
       end
     error -> error
   end
+end
+
+# ============================================
+# GESTIÓN DE SALAS TEMÁTICAS
+# ============================================
+
+defp gestionar_salas_tematicas do
+  IO.puts("\n")
+  IO.puts("============ SALAS TEMATICAS ===============")
+  IO.puts("")
+  IO.puts(" 1. Ver salas públicas")
+  IO.puts(" 2. Crear nueva sala")
+  IO.puts(" 3. Unirse a una sala")
+  IO.puts(" 4. Ver mensajes de sala")
+  IO.puts(" 5. Enviar mensaje a sala")
+  IO.puts(" 6. Salir de una sala")
+  IO.puts("")
+  IO.puts(" 0. ← Volver")
+  IO.puts("")
+  IO.puts("===============================================")
+
+  case obtener_opcion() do
+    "1" -> ver_salas_publicas() |> then(fn _ -> gestionar_salas_tematicas() end)
+    "2" -> crear_sala_tematica() |> then(fn _ -> gestionar_salas_tematicas() end)
+    "3" -> unirse_sala_tematica() |> then(fn _ -> gestionar_salas_tematicas() end)
+    "4" -> ver_mensajes_sala() |> then(fn _ -> gestionar_salas_tematicas() end)
+    "5" -> enviar_mensaje_sala() |> then(fn _ -> gestionar_salas_tematicas() end)
+    "6" -> salir_sala_tematica() |> then(fn _ -> gestionar_salas_tematicas() end)
+    "0" -> :volver
+    _ ->
+      IO.puts("\nX Opcion invalida.\n")
+      gestionar_salas_tematicas()
+  end
+end
+
+defp ver_salas_publicas do
+  IO.puts("\n=== SALAS PÚBLICAS DISPONIBLES ===\n")
+
+  case Hackathon.Services.GestionSalas.listar_salas_publicas() do
+    {:ok, []} ->
+      IO.puts("  No hay salas públicas disponibles.\n")
+
+    {:ok, salas} ->
+      salas
+      |> Enum.with_index(1)
+      |> Enum.each(fn {sala, index} ->
+        IO.puts("  #{index}. #{sala.nombre}")
+        IO.puts("     Descripción: #{sala.descripcion}")
+        IO.puts("     Tipo: #{sala.tipo}")
+        IO.puts("     Miembros: #{length(sala.miembros)}")
+        IO.puts("")
+      end)
+
+    _ ->
+      IO.puts("  Error al obtener salas\n")
+  end
+
+  pausar()
+end
+
+defp crear_sala_tematica do
+  IO.puts("\n=== CREAR SALA TEMÁTICA ===\n")
+
+  IO.puts("Ingrese su correo:")
+  correo = IO.gets("> ") |> String.trim()
+
+  case GestionParticipantes.buscar_por_correo(correo) do
+    {:ok, participante} ->
+      nombre = IO.gets("\nNombre de la sala: ") |> String.trim()
+      descripcion = IO.gets("Descripción: ") |> String.trim()
+
+      IO.puts("\nTipo de sala:")
+      IO.puts(" 1. General")
+      IO.puts(" 2. Técnica")
+      IO.puts(" 3. Networking")
+      IO.puts(" 4. Ayuda")
+
+      tipo = case IO.gets("> ") |> String.trim() do
+        "1" -> :general
+        "2" -> :tecnica
+        "3" -> :networking
+        "4" -> :ayuda
+        _ -> :general
+      end
+
+      case Hackathon.Services.GestionSalas.crear_sala(%{
+        nombre: nombre,
+        descripcion: descripcion,
+        creador_id: participante.id,
+        tipo: tipo
+      }) do
+        {:ok, sala} ->
+          IO.puts("\n✓ Sala '#{sala.nombre}' creada exitosamente!")
+          IO.puts("  ID: #{sala.id}\n")
+
+        {:error, razon} ->
+          IO.puts("\nX Error: #{razon}\n")
+      end
+
+    {:error, :no_encontrado} ->
+      IO.puts("\nUsuario no encontrado.\n")
+
+    _ ->
+      IO.puts("\nError al buscar usuario.\n")
+  end
+
+  pausar()
+end
+
+defp unirse_sala_tematica do
+  IO.puts("\n=== UNIRSE A SALA TEMÁTICA ===\n")
+
+  case Hackathon.Services.GestionSalas.listar_salas_publicas() do
+    {:ok, [_|_] = salas} ->
+      salas
+      |> Enum.with_index(1)
+      |> Enum.each(fn {sala, index} ->
+        IO.puts("  #{index}. #{sala.nombre} (#{length(sala.miembros)} miembros)")
+      end)
+
+      IO.puts("\nSeleccione el número de la sala:")
+      sala_opcion = IO.gets("> ") |> String.trim()
+
+      case Integer.parse(sala_opcion) do
+        {index, _} when index > 0 and index <= length(salas) ->
+          sala = Enum.at(salas, index - 1)
+
+          IO.puts("\nIngrese su correo:")
+          correo = IO.gets("> ") |> String.trim()
+
+          case GestionParticipantes.buscar_por_correo(correo) do
+            {:ok, participante} ->
+              case Hackathon.Services.GestionSalas.unirse_a_sala(sala.id, participante.id) do
+                {:ok, _} ->
+                  IO.puts("\n✓ Te has unido a la sala '#{sala.nombre}'!\n")
+
+                {:error, razon} ->
+                  IO.puts("\nX Error: #{razon}\n")
+              end
+
+            _ ->
+              IO.puts("\nUsuario no encontrado.\n")
+          end
+
+        _ ->
+          IO.puts("\nOpción inválida.\n")
+      end
+
+    {:ok, []} ->
+      IO.puts("  No hay salas disponibles.\n")
+
+    _ ->
+      IO.puts("  Error al obtener salas.\n")
+  end
+
+  pausar()
+end
+
+defp ver_mensajes_sala do
+  IO.puts("\n=== VER MENSAJES DE SALA ===\n")
+
+  IO.puts("Ingrese su correo:")
+  correo = IO.gets("> ") |> String.trim()
+
+  case GestionParticipantes.buscar_por_correo(correo) do
+    {:ok, participante} ->
+      case Hackathon.Services.GestionSalas.listar_salas_publicas() do
+        {:ok, [_|_] = salas} ->
+          # Filtrar salas donde el usuario es miembro
+          mis_salas = Enum.filter(salas, fn s ->
+            participante.id in s.miembros or participante.id == s.creador_id
+          end)
+
+          if Enum.empty?(mis_salas) do
+            IO.puts("\nNo perteneces a ninguna sala aún.\n")
+          else
+            mis_salas
+            |> Enum.with_index(1)
+            |> Enum.each(fn {sala, index} ->
+              IO.puts("  #{index}. #{sala.nombre}")
+            end)
+
+            IO.puts("\nSeleccione la sala:")
+            opcion = IO.gets("> ") |> String.trim()
+
+            case Integer.parse(opcion) do
+              {index, _} when index > 0 and index <= length(mis_salas) ->
+                sala = Enum.at(mis_salas, index - 1)
+
+                case SistemaChat.obtener_historial_sala(sala.id, participante.id) do
+                  {:ok, mensajes} ->
+                    IO.puts("\n--- Mensajes en '#{sala.nombre}' ---\n")
+
+                    if Enum.empty?(mensajes) do
+                      IO.puts("  No hay mensajes aún.\n")
+                    else
+                      Enum.each(mensajes, fn m ->
+                        fecha = Calendar.strftime(m.fecha, "%d/%m %H:%M")
+                        IO.puts("  [#{fecha}] #{String.slice(m.emisor_id, 0..7)}: #{m.contenido}")
+                      end)
+                    end
+
+                  _ ->
+                    IO.puts("\nError al obtener mensajes.\n")
+                end
+
+              _ ->
+                IO.puts("\nOpción inválida.\n")
+            end
+          end
+
+        _ ->
+          IO.puts("\nError al obtener salas.\n")
+      end
+
+    _ ->
+      IO.puts("\nUsuario no encontrado.\n")
+  end
+
+  pausar()
+end
+
+defp enviar_mensaje_sala do
+  IO.puts("\n=== ENVIAR MENSAJE A SALA ===\n")
+
+  IO.puts("Ingrese su correo:")
+  correo = IO.gets("> ") |> String.trim()
+
+  case GestionParticipantes.buscar_por_correo(correo) do
+    {:ok, participante} ->
+      case Hackathon.Services.GestionSalas.listar_salas_publicas() do
+        {:ok, salas} ->
+          mis_salas = Enum.filter(salas, fn s ->
+            participante.id in s.miembros or participante.id == s.creador_id
+          end)
+
+          if Enum.empty?(mis_salas) do
+            IO.puts("\nNo perteneces a ninguna sala.\n")
+          else
+            mis_salas
+            |> Enum.with_index(1)
+            |> Enum.each(fn {sala, index} ->
+              IO.puts("  #{index}. #{sala.nombre}")
+            end)
+
+            IO.puts("\nSeleccione la sala:")
+            opcion = IO.gets("> ") |> String.trim()
+
+            case Integer.parse(opcion) do
+              {index, _} when index > 0 and index <= length(mis_salas) ->
+                sala = Enum.at(mis_salas, index - 1)
+
+                IO.puts("\nEscriba su mensaje:")
+                mensaje = IO.gets("> ") |> String.trim()
+
+                if String.length(mensaje) > 0 do
+                  case SistemaChat.enviar_mensaje_sala(participante.id, mensaje, sala.id) do
+                    {:ok, _} ->
+                      IO.puts("\n✓ Mensaje enviado a '#{sala.nombre}'!\n")
+
+                    {:error, razon} ->
+                      IO.puts("\nX Error: #{razon}\n")
+                  end
+                else
+                  IO.puts("\nMensaje vacío.\n")
+                end
+
+              _ ->
+                IO.puts("\nOpción inválida.\n")
+            end
+          end
+
+        _ ->
+          IO.puts("\nError al obtener salas.\n")
+      end
+
+    _ ->
+      IO.puts("\nUsuario no encontrado.\n")
+  end
+
+  pausar()
+end
+
+defp salir_sala_tematica do
+  IO.puts("\n=== SALIR DE SALA ===\n")
+
+  IO.puts("Ingrese su correo:")
+  correo = IO.gets("> ") |> String.trim()
+
+  case GestionParticipantes.buscar_por_correo(correo) do
+    {:ok, participante} ->
+      case Hackathon.Services.GestionSalas.listar_todas() do
+        {:ok, salas} ->
+          mis_salas = Enum.filter(salas, fn s -> participante.id in s.miembros end)
+
+          if Enum.empty?(mis_salas) do
+            IO.puts("\nNo perteneces a ninguna sala.\n")
+          else
+            mis_salas
+            |> Enum.with_index(1)
+            |> Enum.each(fn {sala, index} ->
+              IO.puts("  #{index}. #{sala.nombre}")
+            end)
+
+            IO.puts("\nSeleccione la sala:")
+            opcion = IO.gets("> ") |> String.trim()
+
+            case Integer.parse(opcion) do
+              {index, _} when index > 0 and index <= length(mis_salas) ->
+                sala = Enum.at(mis_salas, index - 1)
+
+                case Hackathon.Services.GestionSalas.salir_de_sala(sala.id, participante.id) do
+                  {:ok, _} ->
+                    IO.puts("\n✓ Has salido de la sala '#{sala.nombre}'.\n")
+
+                  {:error, razon} ->
+                    IO.puts("\nX Error: #{razon}\n")
+                end
+
+              _ ->
+                IO.puts("\nOpción inválida.\n")
+            end
+          end
+
+        _ ->
+          IO.puts("\nError al obtener salas.\n")
+      end
+
+    _ ->
+      IO.puts("\nUsuario no encontrado.\n")
+  end
+
+  pausar()
+end
+
+# ============================================
+# MÉTRICAS DEL SISTEMA
+# ============================================
+
+defp ver_metricas_sistema do
+  Hackathon.Metricas.Visualizador.mostrar_dashboard()
+  pausar()
 end
 
 end
