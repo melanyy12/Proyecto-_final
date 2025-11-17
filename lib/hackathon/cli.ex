@@ -613,28 +613,31 @@ end
 # ============================================
 
 defp submenu_sistema do
-mostrar_menu_sistema()
+  mostrar_menu_sistema()
 
-case obtener_opcion() do
-"1" -> mostrar_ayuda() |> then(fn _ -> submenu_sistema() end)
-"2" -> recargar_datos() |> then(fn _ -> submenu_sistema() end)
-"0" -> :volver_menu_principal
-_ ->
-IO.puts("\nX Opcion invalida.\n")
-submenu_sistema()
+  case obtener_opcion() do
+    "1" -> mostrar_ayuda() |> then(fn _ -> submenu_sistema() end)
+    "2" -> recargar_datos() |> then(fn _ -> submenu_sistema() end)
+    "3" -> submenu_nodos_distribuidos() |> then(fn _ -> submenu_sistema() end)
+    "0" -> :volver_menu_principal
+    _ ->
+      IO.puts("\nX Opcion invalida.\n")
+      submenu_sistema()
+  end
 end
-end
+
 
 defp mostrar_menu_sistema do
-IO.puts("\n")
-IO.puts("============== SISTEMA ====================")
-IO.puts("")
-IO.puts(" 1. Ayuda (/help)")
-IO.puts(" 2. Recargar datos")
-IO.puts("")
-IO.puts(" 0. ← Volver al menu principal")
-IO.puts("")
-IO.puts("===============================================")
+  IO.puts("\n")
+  IO.puts("============== SISTEMA ====================")
+  IO.puts("")
+  IO.puts(" 1. Ayuda (/help)")
+  IO.puts(" 2. Recargar datos")
+  IO.puts(" 3. Cluster Distribuido (Nodos)") 
+  IO.puts("")
+  IO.puts(" 0. ← Volver al menu principal")
+  IO.puts("")
+  IO.puts("===============================================")
 end
 
 # ============================================
