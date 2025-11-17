@@ -2337,4 +2337,42 @@ defp ver_metricas_sistema do
   pausar()
 end
 
+
+
+
+def iniciar_nodo(nombre_nodo) when is_binary(nombre_nodo) do
+  nodo_atom = String.to_atom(nombre_nodo)
+  iniciar_nodo(nodo_atom)
+end
+
+def iniciar_nodo(nombre_nodo) when is_atom(nombre_nodo) do
+  # Iniciar en modo distribuido
+  case Node.start(nombre_nodo, :shortnames) do
+    {:ok, _} ->
+      IO.puts("\n Nodo iniciado: #{Node.self()}")
+      IO.puts(" Cookie: #{Node.get_cookie()}")
+
+      # Banner
+      Hackathon.Distribucion.Notificador.banner_bienvenida_cluster()
+
+      # Activar notificaciones
+      Hackathon.Distribucion.Notificador.activar()
+
+      # Mantener vivo
+      IO.puts("\n Para conectar a otro nodo desde el CLI:")
+      IO.puts("   Opción 5 > Opción 9 > Opción 2")
+      IO.puts("\n  Presiona Ctrl+C dos veces para salir\n")
+
+      Process.sleep(:infinity)
+
+    {:error, {:already_started, _}} ->
+      IO.puts("\n Nodo ya iniciado: #{Node.self()}")
+      Process.sleep(:infinity)
+
+    error ->
+      IO.puts("\n Error al iniciar nodo: #{inspect(error)}")
+      System.halt(1)
+  end
+end
+
 end

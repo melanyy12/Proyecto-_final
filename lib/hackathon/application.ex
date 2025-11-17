@@ -12,7 +12,7 @@ defmodule Hackathon.Application do
       # Registry para canales de chat dinámicos
       {Registry, keys: :unique, name: Hackathon.CanalRegistry},
 
-      # Sistema de Chat principal
+      # Sistema de Chat principal (GLOBAL para distribución)
       {Hackathon.Services.SistemaChat, []},
 
       # Monitor de métricas
@@ -20,6 +20,15 @@ defmodule Hackathon.Application do
 
       # Sistema de Nodos Distribuidos
       {Hackathon.Distribucion.Nodo, []},
+
+      # Sistema de Auto-Reconexión
+      {Hackathon.Distribucion.AutoReconexion, []},
+
+      # Dashboard distribuido
+      {Hackathon.Distribucion.Dashboard, []},
+
+      # Notificador de eventos
+      {Hackathon.Distribucion.Notificador, []},
 
       # Supervisor dinámico para canales individuales
       {DynamicSupervisor, strategy: :one_for_one, name: Hackathon.CanalesSupervisor},
@@ -33,7 +42,8 @@ defmodule Hackathon.Application do
     Logger.info(" Iniciando aplicación Hackathon...")
     case Supervisor.start_link(children, opts) do
       {:ok, pid} ->
-        Logger.info(" Aplicación iniciada correctamente")
+        Logger.info("✅ Aplicación iniciada correctamente")
+        Logger.info("📡 Nodo: #{Node.self()}")
         {:ok, pid}
       error ->
         Logger.error(" Error al iniciar aplicación: #{inspect(error)}")
