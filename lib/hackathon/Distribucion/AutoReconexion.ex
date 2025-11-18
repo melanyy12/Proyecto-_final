@@ -75,7 +75,7 @@ defmodule Hackathon.Distribucion.AutoReconexion do
 
       {:noreply, nuevo_estado}
     else
-      Logger.warn(" No se puede activar auto-reconexión: nodo no conectado")
+     Logger.warning(" No se puede activar auto-reconexión: nodo no conectado")
       {:noreply, estado}
     end
   end
@@ -114,7 +114,7 @@ defmodule Hackathon.Distribucion.AutoReconexion do
   def handle_info({:nodedown, nodo, _info}, estado) do
     # Un nodo se desconectó
     if Map.has_key?(estado.nodos_monitoreados, nodo) do
-      Logger.warn(" Nodo desconectado (monitoreado): #{nodo}")
+      Logger.warning(" Nodo desconectado (monitoreado): #{nodo}")
       Logger.info(" Iniciando intentos de reconexión...")
 
       # Programar primer intento de reconexión
@@ -191,7 +191,7 @@ defmodule Hackathon.Distribucion.AutoReconexion do
             {:noreply, nuevo_estado}
           else
             Logger.error(" Máximo de intentos alcanzado para: #{nodo}")
-            Logger.warn(" Nodo marcado como perdido: #{nodo}")
+            Logger.warning(" Nodo marcado como perdido: #{nodo}")
 
             nuevo_estado = estado
             |> update_in([:nodos_perdidos], &[nodo | &1])
