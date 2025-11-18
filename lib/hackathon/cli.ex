@@ -155,14 +155,407 @@ defp submenu_colaboracion do
     "1" -> agregar_avance() |> then(fn _ -> submenu_colaboracion() end)
     "2" -> ver_chat_equipo() |> then(fn _ -> submenu_colaboracion() end)
     "3" -> enviar_mensaje_chat() |> then(fn _ -> submenu_colaboracion() end)
-    "4" -> ver_canal_general() |> then(fn _ -> submenu_colaboracion() end)          # NUEVO
-    "5" -> enviar_anuncio_general() |> then(fn _ -> submenu_colaboracion() end)     # NUEVO
-    "6" -> dar_retroalimentacion_mentor() |> then(fn _ -> submenu_colaboracion() end) # NUEVO
+    "4" -> ver_canal_general() |> then(fn _ -> submenu_colaboracion() end)
+    "5" -> enviar_anuncio_general() |> then(fn _ -> submenu_colaboracion() end)
+    "6" -> dar_retroalimentacion_mentor() |> then(fn _ -> submenu_colaboracion() end)
+    "7" -> gestionar_salas_tematicas() |> then(fn _ -> submenu_colaboracion() end)
+    "8" -> ver_metricas_sistema() |> then(fn _ -> submenu_colaboracion() end)
     "0" -> :volver_menu_principal
     _ ->
       IO.puts("\nX Opcion invalida.\n")
       submenu_colaboracion()
   end
+end
+
+defp submenu_nodos_distribuidos do
+  mostrar_menu_nodos()
+
+  case obtener_opcion() do
+    "1" -> ver_cluster_status() |> then(fn _ -> submenu_nodos_distribuidos() end)
+    "2" -> conectar_nodo_manual() |> then(fn _ -> submenu_nodos_distribuidos() end)
+    "3" -> desconectar_nodo() |> then(fn _ -> submenu_nodos_distribuidos() end)
+    "4" -> sincronizar_cluster() |> then(fn _ -> submenu_nodos_distribuidos() end)
+    "5" -> enviar_broadcast_manual() |> then(fn _ -> submenu_nodos_distribuidos() end)
+    "6" -> dashboard_en_vivo() |> then(fn _ -> submenu_nodos_distribuidos() end)
+    "7" -> configurar_autoreconexion() |> then(fn _ -> submenu_nodos_distribuidos() end)
+    "8" -> estadisticas_cluster() |> then(fn _ -> submenu_nodos_distribuidos() end)
+    "0" -> :volver_menu_principal
+    _ ->
+      IO.puts("\nX Opcion invalida.\n")
+      submenu_nodos_distribuidos()
+  end
+end
+
+defp mostrar_menu_nodos do
+  IO.puts("\n")
+  IO.puts("============ CLUSTER DISTRIBUIDO ==========")
+  IO.puts("")
+  IO.puts(" 1. Ver estado del cluster")
+  IO.puts(" 2. Conectar a un nodo")
+  IO.puts(" 3. Desconectar nodo")
+  IO.puts(" 4. Sincronizar cluster completo")
+  IO.puts(" 5. Enviar broadcast")
+  IO.puts(" 6. Dashboard en tiempo real")
+  IO.puts(" 7. Configurar auto-reconexión")
+  IO.puts(" 8. Estadísticas del cluster")
+  IO.puts("")
+  IO.puts(" 0. ← Volver al menú principal")
+  IO.puts("")
+  IO.puts("===============================================")
+end
+
+defp ver_cluster_status do
+  IO.puts("\n")
+  IO.puts("═══════════════════════════════════════════")
+  IO.puts("   ESTADO DEL CLUSTER DISTRIBUIDO")
+  IO.puts("═══════════════════════════════════════════")
+  IO.puts("")
+
+  # Información del nodo actual
+  info = Hackathon.Distribucion.Nodo.info_nodo_actual()
+
+  IO.puts(" Nodo Actual:")
+  IO.puts("   Nombre: #{info.nombre}")
+  IO.puts("   Cookie: #{info.cookie}")
+  IO.puts("   Vivo: #{if info.vivo?, do: " Sí", else: " No"}")
+  IO.puts("")
+
+  # Nodos conectados
+  case Hackathon.Distribucion.Nodo.listar_nodos_conectados() do
+    {:ok, nodos_info} ->
+      IO.puts(" Nodos Conectados: #{nodos_info.total}")
+
+      if nodos_info.total > 0 do
+        IO.puts("")
+        Enum.with_index(nodos_info.conectados, 1)
+        |> Enum.each(fn {nodo, idx} ->
+          estado = if Node.ping(nodo) == :pong, do: "Ok", else: "Desconectado"
+          IO.puts("   #{idx}. #{estado} #{nodo}")
+        end)
+      else
+        IO.puts("   (No hay otros nodos conectados)")
+      end
+      IO.puts("")
+
+      # Nodos conocidos pero no conectados
+      conocidos_no_conectados = nodos_info.conocidos -- nodos_info.conectados
+      if length(conocidos_no_conectados) > 0 do
+        IO.puts("  Nodos Conocidos (desconectados):")
+        Enum.each(conocidos_no_conectados, fn nodo ->
+          IO.puts("    #{nodo}")
+        end)
+        IO.puts("")
+      end
+
+    _ ->
+      IO.puts(" Error al obtener información de nodos\n")
+  end
+
+  IO.puts("═══════════════════════════════════════════\n")
+  pausar()
+end
+
+defp conectar_nodo_manual do
+  IO.puts("\n=== CONECTAR A UN NODO ===\n")
+
+  IO.puts("Ejemplos de formato:")
+  IO.puts("  • Mismo host: nodo1@#{:inet.gethostname() |> elem(1)}")
+  IO.puts("  • Otra PC: nodo1@192.168.1.10")
+  IO.puts("")
+
+  IO.puts("Ingresa el nombre completo del nodo:")
+  entrada = IO.gets("> ") |> String.trim()
+
+  if entrada != "" do
+    nodo = String.to_atom(entrada)
+
+    IO.puts("\n Conectando a #{nodo}...")
+
+    case Hackathon.Distribucion.Nodo.conectar_nodo(nodo) do
+      {:ok, :conectado} ->
+        IO.puts(" Conectado exitosamente!")
+
+        # Preguntar si activar auto-reconexión
+        IO.puts("\n¿Activar auto-reconexión para este nodo? (s/n)")
+        if IO.gets("> ") |> String.trim() |> String.downcase() == "s" do
+          Hackathon.Distribucion.AutoReconexion.activar_para(nodo)
+          IO.puts(" Auto-reconexión activada")
+        end
+
+      {:ok, :ya_conectado} ->
+        IO.puts("  El nodo ya estaba conectado")
+
+      {:error, :conexion_fallida} ->
+        IO.puts(" No se pudo conectar")
+        IO.puts("\nVerifica que:")
+        IO.puts("  • El nodo esté ejecutándose")
+        IO.puts("  • Usen la misma cookie")
+        IO.puts("  • El firewall permita la conexión")
+
+      error ->
+        IO.puts(" Error: #{inspect(error)}")
+    end
+  else
+    IO.puts("\nOperación cancelada")
+  end
+
+  IO.puts("")
+  pausar()
+end
+
+defp desconectar_nodo do
+  IO.puts("\n=== DESCONECTAR NODO ===\n")
+
+  case Hackathon.Distribucion.Nodo.listar_nodos_conectados() do
+    {:ok, %{conectados: []}} ->
+      IO.puts("No hay nodos conectados para desconectar.\n")
+
+    {:ok, %{conectados: nodos}} ->
+      IO.puts("Nodos conectados:\n")
+
+      nodos
+      |> Enum.with_index(1)
+      |> Enum.each(fn {nodo, idx} ->
+        IO.puts("  #{idx}. #{nodo}")
+      end)
+
+      IO.puts("\nSelecciona el número del nodo a desconectar (0 para cancelar):")
+      opcion = IO.gets("> ") |> String.trim()
+
+      case Integer.parse(opcion) do
+        {num, _} when num > 0 and num <= length(nodos) ->
+          nodo = Enum.at(nodos, num - 1)
+
+          if Node.disconnect(nodo) do
+            IO.puts("\n Desconectado de #{nodo}")
+          else
+            IO.puts("\n No se pudo desconectar")
+          end
+
+        {0, _} ->
+          IO.puts("\nOperación cancelada")
+
+        _ ->
+          IO.puts("\n Opción inválida")
+      end
+
+    _ ->
+      IO.puts("Error al listar nodos.\n")
+  end
+
+  pausar()
+end
+
+defp sincronizar_cluster do
+  IO.puts("\n=== SINCRONIZAR CLUSTER COMPLETO ===\n")
+
+  case Hackathon.Distribucion.Nodo.listar_nodos_conectados() do
+    {:ok, %{total: 0}} ->
+      IO.puts("  No hay otros nodos conectados para sincronizar.\n")
+
+    {:ok, %{total: total}} ->
+      IO.puts(" Sincronizando con #{total} nodo(s)...")
+
+      Hackathon.Distribucion.Nodo.sincronizar_datos()
+
+      # Esperar un poco
+      :timer.sleep(1000)
+
+      IO.puts(" Sincronización completada!")
+      IO.puts("\nDatos sincronizados:")
+      IO.puts("  • Equipos")
+      IO.puts("  • Proyectos")
+      IO.puts("  • Participantes")
+      IO.puts("  • Mentores\n")
+
+    _ ->
+      IO.puts(" Error al sincronizar\n")
+  end
+
+  pausar()
+end
+
+defp enviar_broadcast_manual do
+  IO.puts("\n=== ENVIAR BROADCAST A TODOS LOS NODOS ===\n")
+
+  case Hackathon.Distribucion.Nodo.listar_nodos_conectados() do
+    {:ok, %{total: 0}} ->
+      IO.puts("  No hay otros nodos conectados.\n")
+
+    {:ok, %{total: total}} ->
+      IO.puts("Destino: #{total} nodo(s) conectado(s)")
+      IO.puts("\nTipo de mensaje:")
+      IO.puts("  1. Anuncio general")
+      IO.puts("  2. Alerta")
+      IO.puts("  3. Notificación de evento")
+      IO.puts("  4. Mensaje personalizado")
+
+      tipo_opcion = IO.gets("\nSelecciona tipo: ") |> String.trim()
+
+      {tipo, contenido} = case tipo_opcion do
+        "1" ->
+          IO.puts("\nEscribe el anuncio:")
+          texto = IO.gets("> ") |> String.trim()
+          {:anuncio, texto}
+
+        "2" ->
+          IO.puts("\nEscribe la alerta:")
+          texto = IO.gets("> ") |> String.trim()
+          {:alerta, texto}
+
+        "3" ->
+          IO.puts("\nDescribe el evento:")
+          texto = IO.gets("> ") |> String.trim()
+          {:evento, texto}
+
+        "4" ->
+          IO.puts("\nEscribe el mensaje:")
+          texto = IO.gets("> ") |> String.trim()
+          {:custom, texto}
+
+        _ ->
+          {:none, nil}
+      end
+
+      if contenido do
+        mensaje = {tipo, contenido, Node.self(), DateTime.utc_now()}
+        Hackathon.Distribucion.Nodo.broadcast(mensaje)
+        IO.puts("\n Broadcast enviado a #{total} nodo(s)\n")
+      else
+        IO.puts("\nOperación cancelada\n")
+      end
+
+    _ ->
+      IO.puts(" Error al enviar broadcast\n")
+  end
+
+  pausar()
+end
+
+defp dashboard_en_vivo do
+  IO.puts("\n=== DASHBOARD EN TIEMPO REAL ===\n")
+  IO.puts("El dashboard se actualizará cada 5 segundos.")
+  IO.puts("Presiona Ctrl+C dos veces para salir.\n")
+
+  pausar()
+
+  # Iniciar dashboard
+  Hackathon.Distribucion.Dashboard.iniciar_monitoreo(5)
+
+  # Mantener proceso vivo
+  Process.sleep(:infinity)
+end
+
+defp configurar_autoreconexion do
+  IO.puts("\n=== CONFIGURAR AUTO-RECONEXIÓN ===\n")
+
+  IO.puts("Opciones:")
+  IO.puts("  1. Activar para todos los nodos conectados")
+  IO.puts("  2. Activar para un nodo específico")
+  IO.puts("  3. Desactivar auto-reconexión")
+  IO.puts("  4. Ver nodos monitoreados")
+
+  opcion = IO.gets("\n> ") |> String.trim()
+
+  case opcion do
+    "1" ->
+      nodos = Node.list()
+      if length(nodos) > 0 do
+        Enum.each(nodos, fn nodo ->
+          Hackathon.Distribucion.AutoReconexion.activar_para(nodo)
+        end)
+        IO.puts("\n Auto-reconexión activada para #{length(nodos)} nodo(s)\n")
+      else
+        IO.puts("\n  No hay nodos conectados\n")
+      end
+
+    "2" ->
+      IO.puts("\nIngresa el nodo (ej: nodo1@192.168.1.10):")
+      nodo = IO.gets("> ") |> String.trim() |> String.to_atom()
+      Hackathon.Distribucion.AutoReconexion.activar_para(nodo)
+      IO.puts("\n Auto-reconexión activada para #{nodo}\n")
+
+    "3" ->
+      monitoreados = Hackathon.Distribucion.AutoReconexion.nodos_monitoreados()
+      if length(monitoreados) > 0 do
+        IO.puts("\nNodos monitoreados:")
+        Enum.with_index(monitoreados, 1)
+        |> Enum.each(fn {nodo, idx} ->
+          IO.puts("  #{idx}. #{nodo}")
+        end)
+
+        IO.puts("\nSelecciona el nodo:")
+        num = IO.gets("> ") |> String.trim() |> String.to_integer()
+        nodo = Enum.at(monitoreados, num - 1)
+        Hackathon.Distribucion.AutoReconexion.desactivar_para(nodo)
+        IO.puts("\n Auto-reconexión desactivada para #{nodo}\n")
+      else
+        IO.puts("\n  No hay nodos monitoreados\n")
+      end
+
+    "4" ->
+      monitoreados = Hackathon.Distribucion.AutoReconexion.nodos_monitoreados()
+      IO.puts("\n📡 Nodos con auto-reconexión:")
+      if length(monitoreados) > 0 do
+        Enum.each(monitoreados, fn nodo ->
+          estado = if nodo in Node.list(), do: " Conectado", else: " Reconectando"
+          IO.puts("  • #{nodo} - #{estado}")
+        end)
+      else
+        IO.puts("  (Ninguno)")
+      end
+      IO.puts("")
+
+    _ ->
+      IO.puts("\n Opción inválida\n")
+  end
+
+  pausar()
+end
+
+defp estadisticas_cluster do
+  IO.puts("\n")
+  IO.puts("═══════════════════════════════════════════")
+  IO.puts("   ESTADÍSTICAS DEL CLUSTER")
+  IO.puts("═══════════════════════════════════════════")
+  IO.puts("")
+
+  case Hackathon.Distribucion.Dashboard.obtener_estadisticas() do
+    stats ->
+      IO.puts(" CONECTIVIDAD:")
+      IO.puts("   Nodos activos: #{stats.total_nodos}")
+      IO.puts("   Nodo actual: #{stats.nodo_actual}")
+      IO.puts("")
+
+      IO.puts(" DATOS:")
+      IO.puts("   Equipos totales: #{stats.equipos_total}")
+      IO.puts("   Proyectos totales: #{stats.proyectos_total}")
+      IO.puts("   Participantes: #{stats.participantes_total}")
+      IO.puts("   Mentores: #{stats.mentores_total}")
+      IO.puts("   Mensajes: #{stats.mensajes_total}")
+      IO.puts("")
+
+      IO.puts(" RECURSOS:")
+      IO.puts("   Memoria total: #{stats.memoria_total_mb} MB")
+      IO.puts("")
+
+      # Estadísticas de auto-reconexión
+      auto_stats = Hackathon.Distribucion.AutoReconexion.estadisticas()
+      IO.puts(" AUTO-RECONEXIÓN:")
+      IO.puts("   Nodos monitoreados: #{auto_stats.nodos_monitoreados}")
+      IO.puts("   Reconexiones exitosas: #{auto_stats.reconexiones_exitosas}")
+      IO.puts("   Reconexiones fallidas: #{auto_stats.reconexiones_fallidas}")
+      if length(auto_stats.nodos_perdidos) > 0 do
+        IO.puts("   Nodos perdidos: #{Enum.join(auto_stats.nodos_perdidos, ", ")}")
+      end
+      IO.puts("")
+
+    _ ->
+      IO.puts(" Error al obtener estadísticas\n")
+  end
+
+  IO.puts("═══════════════════════════════════════════\n")
+  pausar()
 end
 
 defp mostrar_menu_colaboracion do
@@ -175,6 +568,8 @@ defp mostrar_menu_colaboracion do
   IO.puts(" 4. Ver canal general de anuncios")
   IO.puts(" 5. Enviar anuncio general (mentor)")
   IO.puts(" 6. Dar retroalimentacion (mentor)")
+  IO.puts(" 7. Gestionar salas tematicas")
+  IO.puts(" 8. Ver metricas del sistema")
   IO.puts("")
   IO.puts(" 0. ← Volver al menu principal")
   IO.puts("")
@@ -218,28 +613,31 @@ end
 # ============================================
 
 defp submenu_sistema do
-mostrar_menu_sistema()
+  mostrar_menu_sistema()
 
-case obtener_opcion() do
-"1" -> mostrar_ayuda() |> then(fn _ -> submenu_sistema() end)
-"2" -> recargar_datos() |> then(fn _ -> submenu_sistema() end)
-"0" -> :volver_menu_principal
-_ ->
-IO.puts("\nX Opcion invalida.\n")
-submenu_sistema()
+  case obtener_opcion() do
+    "1" -> mostrar_ayuda() |> then(fn _ -> submenu_sistema() end)
+    "2" -> recargar_datos() |> then(fn _ -> submenu_sistema() end)
+    "3" -> submenu_nodos_distribuidos() |> then(fn _ -> submenu_sistema() end)
+    "0" -> :volver_menu_principal
+    _ ->
+      IO.puts("\nX Opcion invalida.\n")
+      submenu_sistema()
+  end
 end
-end
+
 
 defp mostrar_menu_sistema do
-IO.puts("\n")
-IO.puts("============== SISTEMA ====================")
-IO.puts("")
-IO.puts(" 1. Ayuda (/help)")
-IO.puts(" 2. Recargar datos")
-IO.puts("")
-IO.puts(" 0. ← Volver al menu principal")
-IO.puts("")
-IO.puts("===============================================")
+  IO.puts("\n")
+  IO.puts("============== SISTEMA ====================")
+  IO.puts("")
+  IO.puts(" 1. Ayuda (/help)")
+  IO.puts(" 2. Recargar datos")
+  IO.puts(" 3. Cluster Distribuido (Nodos)") 
+  IO.puts("")
+  IO.puts(" 0. ← Volver al menu principal")
+  IO.puts("")
+  IO.puts("===============================================")
 end
 
 # ============================================
@@ -1597,6 +1995,386 @@ defp buscar_mentor_por_id(id) do
         mentor -> {:ok, mentor}
       end
     error -> error
+  end
+end
+
+# ============================================
+# GESTIÓN DE SALAS TEMÁTICAS
+# ============================================
+
+defp gestionar_salas_tematicas do
+  IO.puts("\n")
+  IO.puts("============ SALAS TEMATICAS ===============")
+  IO.puts("")
+  IO.puts(" 1. Ver salas públicas")
+  IO.puts(" 2. Crear nueva sala")
+  IO.puts(" 3. Unirse a una sala")
+  IO.puts(" 4. Ver mensajes de sala")
+  IO.puts(" 5. Enviar mensaje a sala")
+  IO.puts(" 6. Salir de una sala")
+  IO.puts("")
+  IO.puts(" 0. ← Volver")
+  IO.puts("")
+  IO.puts("===============================================")
+
+  case obtener_opcion() do
+    "1" -> ver_salas_publicas() |> then(fn _ -> gestionar_salas_tematicas() end)
+    "2" -> crear_sala_tematica() |> then(fn _ -> gestionar_salas_tematicas() end)
+    "3" -> unirse_sala_tematica() |> then(fn _ -> gestionar_salas_tematicas() end)
+    "4" -> ver_mensajes_sala() |> then(fn _ -> gestionar_salas_tematicas() end)
+    "5" -> enviar_mensaje_sala() |> then(fn _ -> gestionar_salas_tematicas() end)
+    "6" -> salir_sala_tematica() |> then(fn _ -> gestionar_salas_tematicas() end)
+    "0" -> :volver
+    _ ->
+      IO.puts("\nX Opcion invalida.\n")
+      gestionar_salas_tematicas()
+  end
+end
+
+defp ver_salas_publicas do
+  IO.puts("\n=== SALAS PÚBLICAS DISPONIBLES ===\n")
+
+  case Hackathon.Services.GestionSalas.listar_salas_publicas() do
+    {:ok, []} ->
+      IO.puts("  No hay salas públicas disponibles.\n")
+
+    {:ok, salas} ->
+      salas
+      |> Enum.with_index(1)
+      |> Enum.each(fn {sala, index} ->
+        IO.puts("  #{index}. #{sala.nombre}")
+        IO.puts("     Descripción: #{sala.descripcion}")
+        IO.puts("     Tipo: #{sala.tipo}")
+        IO.puts("     Miembros: #{length(sala.miembros)}")
+        IO.puts("")
+      end)
+
+    _ ->
+      IO.puts("  Error al obtener salas\n")
+  end
+
+  pausar()
+end
+
+defp crear_sala_tematica do
+  IO.puts("\n=== CREAR SALA TEMÁTICA ===\n")
+
+  IO.puts("Ingrese su correo:")
+  correo = IO.gets("> ") |> String.trim()
+
+  case GestionParticipantes.buscar_por_correo(correo) do
+    {:ok, participante} ->
+      nombre = IO.gets("\nNombre de la sala: ") |> String.trim()
+      descripcion = IO.gets("Descripción: ") |> String.trim()
+
+      IO.puts("\nTipo de sala:")
+      IO.puts(" 1. General")
+      IO.puts(" 2. Técnica")
+      IO.puts(" 3. Networking")
+      IO.puts(" 4. Ayuda")
+
+      tipo = case IO.gets("> ") |> String.trim() do
+        "1" -> :general
+        "2" -> :tecnica
+        "3" -> :networking
+        "4" -> :ayuda
+        _ -> :general
+      end
+
+      case Hackathon.Services.GestionSalas.crear_sala(%{
+        nombre: nombre,
+        descripcion: descripcion,
+        creador_id: participante.id,
+        tipo: tipo
+      }) do
+        {:ok, sala} ->
+          IO.puts("\n✓ Sala '#{sala.nombre}' creada exitosamente!")
+          IO.puts("  ID: #{sala.id}\n")
+
+        {:error, razon} ->
+          IO.puts("\nX Error: #{razon}\n")
+      end
+
+    {:error, :no_encontrado} ->
+      IO.puts("\nUsuario no encontrado.\n")
+
+    _ ->
+      IO.puts("\nError al buscar usuario.\n")
+  end
+
+  pausar()
+end
+
+defp unirse_sala_tematica do
+  IO.puts("\n=== UNIRSE A SALA TEMÁTICA ===\n")
+
+  case Hackathon.Services.GestionSalas.listar_salas_publicas() do
+    {:ok, [_|_] = salas} ->
+      salas
+      |> Enum.with_index(1)
+      |> Enum.each(fn {sala, index} ->
+        IO.puts("  #{index}. #{sala.nombre} (#{length(sala.miembros)} miembros)")
+      end)
+
+      IO.puts("\nSeleccione el número de la sala:")
+      sala_opcion = IO.gets("> ") |> String.trim()
+
+      case Integer.parse(sala_opcion) do
+        {index, _} when index > 0 and index <= length(salas) ->
+          sala = Enum.at(salas, index - 1)
+
+          IO.puts("\nIngrese su correo:")
+          correo = IO.gets("> ") |> String.trim()
+
+          case GestionParticipantes.buscar_por_correo(correo) do
+            {:ok, participante} ->
+              case Hackathon.Services.GestionSalas.unirse_a_sala(sala.id, participante.id) do
+                {:ok, _} ->
+                  IO.puts("\n✓ Te has unido a la sala '#{sala.nombre}'!\n")
+
+                {:error, razon} ->
+                  IO.puts("\nX Error: #{razon}\n")
+              end
+
+            _ ->
+              IO.puts("\nUsuario no encontrado.\n")
+          end
+
+        _ ->
+          IO.puts("\nOpción inválida.\n")
+      end
+
+    {:ok, []} ->
+      IO.puts("  No hay salas disponibles.\n")
+
+    _ ->
+      IO.puts("  Error al obtener salas.\n")
+  end
+
+  pausar()
+end
+
+defp ver_mensajes_sala do
+  IO.puts("\n=== VER MENSAJES DE SALA ===\n")
+
+  IO.puts("Ingrese su correo:")
+  correo = IO.gets("> ") |> String.trim()
+
+  case GestionParticipantes.buscar_por_correo(correo) do
+    {:ok, participante} ->
+      case Hackathon.Services.GestionSalas.listar_salas_publicas() do
+        {:ok, [_|_] = salas} ->
+          # Filtrar salas donde el usuario es miembro
+          mis_salas = Enum.filter(salas, fn s ->
+            participante.id in s.miembros or participante.id == s.creador_id
+          end)
+
+          if Enum.empty?(mis_salas) do
+            IO.puts("\nNo perteneces a ninguna sala aún.\n")
+          else
+            mis_salas
+            |> Enum.with_index(1)
+            |> Enum.each(fn {sala, index} ->
+              IO.puts("  #{index}. #{sala.nombre}")
+            end)
+
+            IO.puts("\nSeleccione la sala:")
+            opcion = IO.gets("> ") |> String.trim()
+
+            case Integer.parse(opcion) do
+              {index, _} when index > 0 and index <= length(mis_salas) ->
+                sala = Enum.at(mis_salas, index - 1)
+
+                case SistemaChat.obtener_historial_sala(sala.id, participante.id) do
+                  {:ok, mensajes} ->
+                    IO.puts("\n--- Mensajes en '#{sala.nombre}' ---\n")
+
+                    if Enum.empty?(mensajes) do
+                      IO.puts("  No hay mensajes aún.\n")
+                    else
+                      Enum.each(mensajes, fn m ->
+                        fecha = Calendar.strftime(m.fecha, "%d/%m %H:%M")
+                        IO.puts("  [#{fecha}] #{String.slice(m.emisor_id, 0..7)}: #{m.contenido}")
+                      end)
+                    end
+
+                  _ ->
+                    IO.puts("\nError al obtener mensajes.\n")
+                end
+
+              _ ->
+                IO.puts("\nOpción inválida.\n")
+            end
+          end
+
+        _ ->
+          IO.puts("\nError al obtener salas.\n")
+      end
+
+    _ ->
+      IO.puts("\nUsuario no encontrado.\n")
+  end
+
+  pausar()
+end
+
+defp enviar_mensaje_sala do
+  IO.puts("\n=== ENVIAR MENSAJE A SALA ===\n")
+
+  IO.puts("Ingrese su correo:")
+  correo = IO.gets("> ") |> String.trim()
+
+  case GestionParticipantes.buscar_por_correo(correo) do
+    {:ok, participante} ->
+      case Hackathon.Services.GestionSalas.listar_salas_publicas() do
+        {:ok, salas} ->
+          mis_salas = Enum.filter(salas, fn s ->
+            participante.id in s.miembros or participante.id == s.creador_id
+          end)
+
+          if Enum.empty?(mis_salas) do
+            IO.puts("\nNo perteneces a ninguna sala.\n")
+          else
+            mis_salas
+            |> Enum.with_index(1)
+            |> Enum.each(fn {sala, index} ->
+              IO.puts("  #{index}. #{sala.nombre}")
+            end)
+
+            IO.puts("\nSeleccione la sala:")
+            opcion = IO.gets("> ") |> String.trim()
+
+            case Integer.parse(opcion) do
+              {index, _} when index > 0 and index <= length(mis_salas) ->
+                sala = Enum.at(mis_salas, index - 1)
+
+                IO.puts("\nEscriba su mensaje:")
+                mensaje = IO.gets("> ") |> String.trim()
+
+                if String.length(mensaje) > 0 do
+                  case SistemaChat.enviar_mensaje_sala(participante.id, mensaje, sala.id) do
+                    {:ok, _} ->
+                      IO.puts("\n✓ Mensaje enviado a '#{sala.nombre}'!\n")
+
+                    {:error, razon} ->
+                      IO.puts("\nX Error: #{razon}\n")
+                  end
+                else
+                  IO.puts("\nMensaje vacío.\n")
+                end
+
+              _ ->
+                IO.puts("\nOpción inválida.\n")
+            end
+          end
+
+        _ ->
+          IO.puts("\nError al obtener salas.\n")
+      end
+
+    _ ->
+      IO.puts("\nUsuario no encontrado.\n")
+  end
+
+  pausar()
+end
+
+defp salir_sala_tematica do
+  IO.puts("\n=== SALIR DE SALA ===\n")
+
+  IO.puts("Ingrese su correo:")
+  correo = IO.gets("> ") |> String.trim()
+
+  case GestionParticipantes.buscar_por_correo(correo) do
+    {:ok, participante} ->
+      case Hackathon.Services.GestionSalas.listar_todas() do
+        {:ok, salas} ->
+          mis_salas = Enum.filter(salas, fn s -> participante.id in s.miembros end)
+
+          if Enum.empty?(mis_salas) do
+            IO.puts("\nNo perteneces a ninguna sala.\n")
+          else
+            mis_salas
+            |> Enum.with_index(1)
+            |> Enum.each(fn {sala, index} ->
+              IO.puts("  #{index}. #{sala.nombre}")
+            end)
+
+            IO.puts("\nSeleccione la sala:")
+            opcion = IO.gets("> ") |> String.trim()
+
+            case Integer.parse(opcion) do
+              {index, _} when index > 0 and index <= length(mis_salas) ->
+                sala = Enum.at(mis_salas, index - 1)
+
+                case Hackathon.Services.GestionSalas.salir_de_sala(sala.id, participante.id) do
+                  {:ok, _} ->
+                    IO.puts("\n✓ Has salido de la sala '#{sala.nombre}'.\n")
+
+                  {:error, razon} ->
+                    IO.puts("\nX Error: #{razon}\n")
+                end
+
+              _ ->
+                IO.puts("\nOpción inválida.\n")
+            end
+          end
+
+        _ ->
+          IO.puts("\nError al obtener salas.\n")
+      end
+
+    _ ->
+      IO.puts("\nUsuario no encontrado.\n")
+  end
+
+  pausar()
+end
+
+# ============================================
+# MÉTRICAS DEL SISTEMA
+# ============================================
+
+defp ver_metricas_sistema do
+  Hackathon.Metricas.Visualizador.mostrar_dashboard()
+  pausar()
+end
+
+
+
+
+def iniciar_nodo(nombre_nodo) when is_binary(nombre_nodo) do
+  nodo_atom = String.to_atom(nombre_nodo)
+  iniciar_nodo(nodo_atom)
+end
+
+def iniciar_nodo(nombre_nodo) when is_atom(nombre_nodo) do
+  # Iniciar en modo distribuido
+  case Node.start(nombre_nodo, :shortnames) do
+    {:ok, _} ->
+      IO.puts("\n Nodo iniciado: #{Node.self()}")
+      IO.puts(" Cookie: #{Node.get_cookie()}")
+
+      # Banner
+      Hackathon.Distribucion.Notificador.banner_bienvenida_cluster()
+
+      # Activar notificaciones
+      Hackathon.Distribucion.Notificador.activar()
+
+      # Mantener vivo
+      IO.puts("\n Para conectar a otro nodo desde el CLI:")
+      IO.puts("   Opción 5 > Opción 9 > Opción 2")
+      IO.puts("\n  Presiona Ctrl+C dos veces para salir\n")
+
+      Process.sleep(:infinity)
+
+    {:error, {:already_started, _}} ->
+      IO.puts("\n Nodo ya iniciado: #{Node.self()}")
+      Process.sleep(:infinity)
+
+    error ->
+      IO.puts("\n Error al iniciar nodo: #{inspect(error)}")
+      System.halt(1)
   end
 end
 

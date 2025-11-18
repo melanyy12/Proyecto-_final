@@ -1,17 +1,14 @@
 defmodule HackathonTest do
   use ExUnit.Case
-  doctest Hackathon
+  # REMOVIDO: doctest Hackathon (porque no existe ese módulo)
 
   alias Hackathon.Services.{GestionEquipos, GestionProyectos, GestionParticipantes, GestionMentores, SistemaChat}
   alias Hackathon.Domain.{Equipo, Proyecto, Participante, Mentor}
 
   setup do
     # Limpiar datos antes de cada prueba
-    File.rm("data/equipos.txt")
-    File.rm("data/proyectos.txt")
-    File.rm("data/participantes.txt")
-    File.rm("data/mentores.txt")
-    File.rm("data/mensajes.txt")
+    File.rm_rf("data")
+    File.mkdir_p!("data")
     :ok
   end
 
@@ -190,7 +187,8 @@ defmodule HackathonTest do
       {:ok, participante} = GestionParticipantes.registrar_participante(%{
         nombre: "Juan Perez",
         correo: "juan@test.com",
-        habilidades: ["Elixir", "Python"]
+        habilidades: ["Elixir", "Python"],
+        password: "password123"
       })
 
       assert participante.nombre == "Juan Perez"
@@ -203,7 +201,8 @@ defmodule HackathonTest do
       {:error, mensaje} = GestionParticipantes.registrar_participante(%{
         nombre: "Test User",
         correo: "correo-invalido",
-        habilidades: []
+        habilidades: [],
+        password: "password123"
       })
 
       assert String.contains?(mensaje, "Correo electrónico inválido")
@@ -219,7 +218,8 @@ defmodule HackathonTest do
       {:ok, participante} = GestionParticipantes.registrar_participante(%{
         nombre: "Maria Garcia",
         correo: "maria@test.com",
-        habilidades: ["React"]
+        habilidades: ["React"],
+        password: "password123"
       })
 
       {:ok, participante_actualizado} = GestionParticipantes.unirse_a_equipo(
@@ -234,7 +234,8 @@ defmodule HackathonTest do
       GestionParticipantes.registrar_participante(%{
         nombre: "Carlos Lopez",
         correo: "carlos@test.com",
-        habilidades: []
+        habilidades: [],
+        password: "password123"
       })
 
       {:ok, participante} = GestionParticipantes.buscar_por_correo("carlos@test.com")
@@ -248,7 +249,8 @@ defmodule HackathonTest do
       {:ok, mentor} = GestionMentores.registrar_mentor(%{
         nombre: "Dr. Smith",
         correo: "smith@mentor.com",
-        especialidad: "Inteligencia Artificial"
+        especialidad: "Inteligencia Artificial",
+        password: "password123"
       })
 
       assert mentor.nombre == "Dr. Smith"
@@ -267,7 +269,8 @@ defmodule HackathonTest do
       {:ok, mentor} = GestionMentores.registrar_mentor(%{
         nombre: "Mentor Test",
         correo: "mentor@test.com",
-        especialidad: "Backend"
+        especialidad: "Backend",
+        password: "password123"
       })
 
       {:ok, mentor_actualizado} = GestionMentores.asignar_a_equipo(mentor.id, equipo.id)
@@ -280,7 +283,8 @@ defmodule HackathonTest do
       {:ok, mentor} = GestionMentores.registrar_mentor(%{
         nombre: "Mentor",
         correo: "mentor@test.com",
-        especialidad: "Test"
+        especialidad: "Test",
+        password: "password123"
       })
 
       # Crear y asignar 3 equipos (máximo)
@@ -393,7 +397,8 @@ defmodule HackathonTest do
       {:ok, participante} = GestionParticipantes.registrar_participante(%{
         nombre: "Ana Torres",
         correo: "ana@test.com",
-        habilidades: ["Python", "ML"]
+        habilidades: ["Python", "ML"],
+        password: "password123"
       })
 
       # 3. Unir participante a equipo
@@ -415,7 +420,8 @@ defmodule HackathonTest do
       {:ok, mentor} = GestionMentores.registrar_mentor(%{
         nombre: "Dr. Garcia",
         correo: "garcia@mentor.com",
-        especialidad: "Machine Learning"
+        especialidad: "Machine Learning",
+        password: "password123"
       })
 
       {:ok, proyecto_con_retro} = GestionProyectos.agregar_retroalimentacion(

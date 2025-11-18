@@ -78,6 +78,38 @@ defmodule Hackathon.Semilla do
   IO.puts("✨ Datos iniciales cargados exitosamente!\n")
 
   {:ok, %{equipos: equipos, proyectos: proyectos, participantes: participantes, mentores: mentores}}
+  crear_salas_iniciales()
+IO.puts(" ✓ Salas temáticas creadas")
+end
+
+defp crear_salas_iniciales do
+  # Obtener un participante como creador
+  case GestionParticipantes.listar_participantes() do
+    {:ok, [participante | _]} ->
+      Hackathon.Services.GestionSalas.crear_sala(%{
+        nombre: "💡 Ideación y Brainstorming",
+        descripcion: "Espacio para compartir ideas innovadoras",
+        creador_id: participante.id,
+        tipo: :general
+      })
+
+      Hackathon.Services.GestionSalas.crear_sala(%{
+        nombre: "💻 Soporte Técnico",
+        descripcion: "Ayuda con problemas de código y arquitectura",
+        creador_id: participante.id,
+        tipo: :tecnica
+      })
+
+      Hackathon.Services.GestionSalas.crear_sala(%{
+        nombre: "🤝 Networking",
+        descripcion: "Conoce a otros participantes y forma alianzas",
+        creador_id: participante.id,
+        tipo: :networking
+      })
+
+    _ ->
+      :ok
+  end
 end
 
   defp cargar_participantes do
